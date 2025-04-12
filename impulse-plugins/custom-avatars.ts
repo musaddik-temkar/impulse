@@ -1,7 +1,7 @@
 /******************************************
 * Pokemon Showdown Custom Avatar Commands *
 * Original Code By: CreatePhil And Others *
-* Updated To Typescript By: Prince Sky    *
+* Modified By: @musaddiktemkar            *
 *******************************************/
 
 import { FS } from '../lib/fs';
