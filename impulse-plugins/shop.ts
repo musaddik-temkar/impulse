@@ -1,3 +1,8 @@
+/**************************************
+* Pokemon Showdown Shop Commands      *
+* Author: @musaddiktemkar             *
+**************************************/
+
 import { FS } from '../lib/fs';
 
 const PATHS = {
