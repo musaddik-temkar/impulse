@@ -1,8 +1,9 @@
 /*************************************************
 * Pokemon Showdown News Commands                 *
 * Original Code By: Lord Haji, HoeenHero         *
-* Updated To Typescript By: PrinceSky & Turbo Rx *
+* Modified By: @musaddiktemkar & Turbo Rx        *
 **************************************************/
+
 /**********************""*************"*****
 * Add this code inside server/users.ts     *
 * handleRename function                    *
