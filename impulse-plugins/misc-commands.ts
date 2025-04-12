@@ -1,7 +1,6 @@
 /* Miscellaneous Commands
-* Credits: Unknown
-* Updates & Typescript Conversion:
-* Prince Sky
+* Credits: HoeenHero & Others
+* Modified By: @musaddiktemkar
 */
 
 /* Poof Messages */
