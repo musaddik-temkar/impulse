@@ -1,6 +1,6 @@
 /******************************************
 * Pokemon Showdown Anime & Manga Commands *
-* author: @Prince Sky                     *
+* author: @musaddiktemkar                 *
 * Html By: @TurboRx                       *
 *******************************************/
 
