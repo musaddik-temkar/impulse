@@ -1,7 +1,6 @@
 /* Utility Functions
-* Credits: Unknown
-* Updates & Typescript Conversion:
-* Prince Sky.
+* Credits: HoeenHero & Others
+* Modified By: @musaddiktemkar
 */
 
 import https from 'https';
