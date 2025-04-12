@@ -1,7 +1,6 @@
 /*************************************
 * Pokemon Showdown Economy Commands  *
-* author: @PrinceSky                 *
-* Html By: Turbo Rx                  *
+* author: @musaddiktemkar            *                *
 **************************************/
 
 import { FS } from '../lib/fs';
