@@ -1,8 +1,8 @@
-/* Custom Colors Commands
- * Credits: panpawn, jd, HoeenHero
- * Updates & Typescript Conversion:
- * Prince Sky
- */
+/*****************************************
+* Pokemon Showdown Custom Color Commands *
+* Credits: panpawn, jd, HoeenHero        *
+* Modified By: @musaddiktemkar           *
+*****************************************/
 
 import * as crypto from 'crypto';
 import { FS } from '../lib/fs';
