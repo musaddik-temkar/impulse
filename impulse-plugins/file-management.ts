@@ -7,8 +7,8 @@
 * - These commands are restricted to the 'development' room and whitelisted
 * - users with console access for security.
 *
-* Original Code By: HoeenHero
-* Updated To Typescript By: Prince Sky
+* Credits: HoeenHero
+* Modified By: @musaddiktemkar
 */
 
 import * as https from 'https';
