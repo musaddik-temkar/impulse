@@ -1,7 +1,7 @@
 /***************************************
 * Pokemon Showdown EXP Commands        *
 * Original Code By: Volco & Insist     *
-* Updated To Typescript By: Prince Sky *
+* Modified By: @musaddiktemkar         *
 ***************************************/
 
 /*********************************************
