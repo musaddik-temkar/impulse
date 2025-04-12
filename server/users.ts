@@ -873,6 +873,9 @@ export class User extends Chat.MessageContext {
 
 			Rooms.global.checkAutojoin(user);
 			Rooms.global.rejoinGames(user);
+			/* Impulse News Function*/
+			Impulse.NewsManager.onUserConnect(user);
+			/* Ends */
 			Chat.loginfilter(user, this, userType);
 			return true;
 		}
@@ -1213,6 +1216,11 @@ export class User extends Chat.MessageContext {
 		// NOTE: can't do a this.update(...) at this point because we're no longer connected.
 	}
 	onDisconnect(connection: Connection) {
+		/* Impulse Seen Function */
+		if (this.named) {
+			Db.seen.set(this.id, Date.now());
+		}
+		/* Ends */
 		// slightly safer to do this here so that we can do this before Conn#user is nulled.
 		if (connection.openPages) {
 			for (const page of connection.openPages) {
