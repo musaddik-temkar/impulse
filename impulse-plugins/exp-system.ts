@@ -1,7 +1,7 @@
 /***************************************
 * Pokemon Showdown EXP Commands        *
 * Original Code By: Volco & Insist     *
-* Modified By: @musaddiktemkar         *
+* Updated To Typescript By: Prince Sky *
 ***************************************/
 
 /*********************************************
@@ -45,9 +45,16 @@ interface CooldownData {
   [userid: string]: number;
 }
 
+// Add config for double exp and other settings
+interface ExpConfig {
+  doubleExp: boolean;
+  doubleExpEndTime: number | null;
+}
+
 export class ExpSystem {
   private static data: ExpData = ExpSystem.loadExpData();
   private static cooldowns: CooldownData = {};
+  private static config: ExpConfig = ExpSystem.loadExpConfig();
 
   private static loadExpData(): ExpData {
     try {
@@ -67,6 +74,35 @@ export class ExpSystem {
       FS(EXP_FILE_PATH).writeUpdate(() => JSON.stringify(dataToWrite, null, 2));
     } catch (error) {
       console.error(`Error saving EXP data: ${error}`);
+    }
+  }
+
+  private static loadExpConfig(): ExpConfig {
+    try {
+      const rawData = FS('impulse-db/exp-config.json').readIfExistsSync();
+      if (rawData) {
+        const config = JSON.parse(rawData) as ExpConfig;
+        // Restore double exp settings if they exist
+        DOUBLE_EXP = config.doubleExp;
+        DOUBLE_EXP_END_TIME = config.doubleExpEndTime;
+        return config;
+      }
+      return { doubleExp: false, doubleExpEndTime: null };
+    } catch (error) {
+      console.error(`Error reading EXP config: ${error}`);
+      return { doubleExp: false, doubleExpEndTime: null };
+    }
+  }
+
+  private static saveExpConfig(): void {
+    try {
+      const config: ExpConfig = {
+        doubleExp: DOUBLE_EXP,
+        doubleExpEndTime: DOUBLE_EXP_END_TIME
+      };
+      FS('impulse-db/exp-config.json').writeUpdate(() => JSON.stringify(config, null, 2));
+    } catch (error) {
+      console.error(`Error saving EXP config: ${error}`);
     }
   }
 
@@ -95,6 +131,9 @@ export class ExpSystem {
       return this.readExp(id);
     }
 
+    const currentExp = this.readExp(id);
+    const currentLevel = this.getLevel(currentExp);
+    
     const gainedAmount = DOUBLE_EXP ? amount * 2 : amount;
     this.data[id] = (this.data[id] || 0) + gainedAmount;
     
@@ -103,54 +142,121 @@ export class ExpSystem {
     }
     
     this.saveExpData();
+    
+    // Check if user leveled up
+    const newLevel = this.getLevel(this.data[id]);
+    if (newLevel > currentLevel) {
+      // User leveled up!
+      this.notifyLevelUp(id, newLevel, currentLevel);
+    }
+    
     return this.data[id];
   }
 
   static addExpRewards(userid: string, amount: number, reason?: string, by?: string): number {
     const id = toID(userid);
+    
+    const currentExp = this.readExp(id);
+    const currentLevel = this.getLevel(currentExp);
+    
     const gainedAmount = DOUBLE_EXP ? amount * 2 : amount;
     this.data[id] = (this.data[id] || 0) + gainedAmount;
     
     this.saveExpData();
+    
+    // Check if user leveled up
+    const newLevel = this.getLevel(this.data[id]);
+    if (newLevel > currentLevel) {
+      // User leveled up!
+      this.notifyLevelUp(id, newLevel, currentLevel);
+    }
+    
     return this.data[id];
   }
 
-	static checkDoubleExpStatus(room?: Room | null, user?: User) {
+  // New method to handle level-up notifications
+  static notifyLevelUp(userid: string, newLevel: number, oldLevel: number): void {
+    const user = Users.get(userid);
+    if (!user || !user.connected) return;
+    
+    // Calculate rewards if any (optional)
+    let rewards = '';
+    
+    // For milestone levels, we could give special rewards
+    if (newLevel % 5 === 0) {
+      // Example: Give bonus EXP for milestone levels
+      const bonusExp = newLevel * 5;
+      this.addExpRewards(userid, bonusExp, 'Level milestone bonus');
+      rewards = `You received a bonus of ${bonusExp} ${EXP_UNIT} for reaching a milestone level!`;
+    }
+    
+    // Send popup notification to user
+    user.popup(
+      `|html|<div style="text-align: center;">` +
+      `<h3 style="color: #3498db;">Level Up!</h3>` +
+      `<div style="font-size: 1.2em; margin: 10px 0;">` +
+      `You are now <b style="color: #e74c3c;">Level ${newLevel}</b>!` +
+      `</div>` +
+      `<div style="margin: 10px 0; font-style: italic;">` +
+      `You advanced from Level ${oldLevel} to Level ${newLevel}` +
+      `</div>` +
+      (rewards ? `<div style="margin-top: 10px; color: #27ae60;">${rewards}</div>` : '') +
+      `<div style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">` +
+      `Keep chatting and participating to earn more ${EXP_UNIT}!` +
+      `</div>` +
+      `</div>`
+    );
+    
+    // For significant levels, we could announce in a room
+    if (newLevel % 10 === 0) {
+      const mainRoom = Rooms.get('lobby');
+      if (mainRoom) {
+        mainRoom.add(
+          `|html|<div class="broadcast-blue">` +
+          `<b>${Impulse.nameColor(userid, true, true)}</b> has reached <b>Level ${newLevel}</b>!` +
+          `</div>`
+        ).update();
+      }
+    }
+  }
+
+  static checkDoubleExpStatus(room?: Room | null, user?: User) {
     if (DOUBLE_EXP && DOUBLE_EXP_END_TIME && Date.now() >= DOUBLE_EXP_END_TIME) {
-        DOUBLE_EXP = false;
-        DOUBLE_EXP_END_TIME = null;
+      DOUBLE_EXP = false;
+      DOUBLE_EXP_END_TIME = null;
+      this.saveExpConfig();
     }
     if (!room) return;
     let message;
     if (DOUBLE_EXP) {
-        const durationText = DOUBLE_EXP_END_TIME 
-            ? `until ${formatTime(new Date(DOUBLE_EXP_END_TIME))} UTC`
-            : 'No duration specified';
-            
-        message = 
-            `<div class="broadcast-blue">` +
-            `<b>Double EXP has been enabled${user ? ` by ${Impulse.nameColor(user.name, true, true)}` : ''}!</b><br>` +
-            `Duration: ${durationText}<br>` +
-            `All EXP gains will now be doubled.` +
-            `</div>`;
+      const durationText = DOUBLE_EXP_END_TIME 
+        ? `until ${formatTime(new Date(DOUBLE_EXP_END_TIME))} UTC`
+        : 'No duration specified';
+          
+      message = 
+        `<div class="broadcast-blue">` +
+        `<b>Double EXP has been enabled${user ? ` by ${Impulse.nameColor(user.name, true, true)}` : ''}!</b><br>` +
+        `Duration: ${durationText}<br>` +
+        `All EXP gains will now be doubled.` +
+        `</div>`;
     } else {
-        message = 
-            `<div class="broadcast-blue">` +
-            `<b>Double EXP has been ${DOUBLE_EXP_END_TIME ? 'ended' : 'disabled'}${user ? ` by ${Impulse.nameColor(user.name, true, true)}` : ''}!</b><br>` +
-            `All EXP gains will now be normal.` +
-            `</div>`;
+      message = 
+        `<div class="broadcast-blue">` +
+        `<b>Double EXP has been ${DOUBLE_EXP_END_TIME ? 'ended' : 'disabled'}${user ? ` by ${Impulse.nameColor(user.name, true, true)}` : ''}!</b><br>` +
+        `All EXP gains will now be normal.` +
+        `</div>`;
     }
 
     room.add(`|html|${message}`).update();
     
     if (user) {
-        const status = DOUBLE_EXP ? 'enabled' : 'disabled';
-        const duration = DOUBLE_EXP_END_TIME 
-            ? `until ${formatTime(new Date(DOUBLE_EXP_END_TIME))} UTC`
-            : 'No duration specified';
-        //this.modlog('TOGGLEDOUBLEEXP', null, `${status} - ${duration}`, { by: user.id });
+      const status = DOUBLE_EXP ? 'enabled' : 'disabled';
+      const duration = DOUBLE_EXP_END_TIME 
+        ? `until ${formatTime(new Date(DOUBLE_EXP_END_TIME))} UTC`
+        : 'No duration specified';
+      //this.modlog('TOGGLEDOUBLEEXP', null, `${status} - ${duration}`, { by: user.id });
     }
-	}
+  }
 
   static grantExp() {
     Users.users.forEach(user => {
@@ -206,6 +312,36 @@ export class ExpSystem {
 
 Impulse.ExpSystem = ExpSystem;
 
+export const pages: Chat.PageTable = {
+  expladder(args, user) {
+    const richest = ExpSystem.getRichestUsers(100);
+    if (!richest.length) {
+      return `<div class="pad"><h2>No users have any ${EXP_UNIT} yet.</h2></div>`;
+    }
+
+    const data = richest.map(([userid, exp], index) => {
+      const level = ExpSystem.getLevel(exp);
+      const expForNext = ExpSystem.getExpForNextLevel(level + 1);
+      return [
+        (index + 1).toString(),
+        Impulse.nameColor(userid, true, true),
+        `${exp} ${EXP_UNIT}`,
+        level.toString(),
+        `${expForNext} ${EXP_UNIT}`,
+      ];
+    });
+
+    const output = Impulse.generateThemedTable(
+      `Top ${richest.length} Users by ${EXP_UNIT}`,
+      ['Rank', 'User', 'EXP', 'Level', 'Next Level At'],
+      data,
+      Impulse.nameColor('TurboRx', true, true)
+    );
+    return `<div class="pad ladder">${output}</div>`;
+  },
+};
+
+
 export const commands: Chat.Commands = {
   level: 'exp',
   exp(target, room, user) {
@@ -220,20 +356,58 @@ export const commands: Chat.Commands = {
     const expInCurrentLevel = currentExp - previousLevelExp;
     const expNeededForNextLevel = nextLevelExp - previousLevelExp;
     const progressPercentage = Math.floor((expInCurrentLevel / expNeededForNextLevel) * 100);
-    
-    const progressBarWidth = 200;
-    const progressBarHTML = `<div style="width: ${progressBarWidth}px; height: 15px; background: #e0e0e0; border-radius: 10px; overflow: hidden; display: inline-block;">` +
-     `<div style="width: ${progressPercentage}%; height: 100%; background: linear-gradient(90deg, #2ecc71, #27ae60); transition: width 0.3s ease;"></div></div> ${progressPercentage}%`;
     const expNeeded = nextLevelExp - currentExp;
     const executedBy = user.name === target ? '' : ` (Checked by ${Impulse.nameColor(user.name, true, true)})`;
     
+    // Create a theme-neutral progress bar with better visibility on both light/dark themes
+    const progressBarHTML = 
+      `<div style="width: 200px; height: 18px; background: rgba(200, 200, 200, 0.2); border-radius: 10px; overflow: hidden; border: 1px solid rgba(150, 150, 150, 0.3); margin: 5px auto;">` +
+      `<div style="width: ${progressPercentage}%; height: 100%; background: linear-gradient(90deg, #3498db, #2980b9); box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);"></div>` +
+      `</div>`;
+    
+    // Create a more visually appealing EXP display with stats, ensuring proper string concatenation
     this.sendReplyBox(
-      `<div class="infobox">` +
-      `<strong>${Impulse.nameColor(userid, true, true)}</strong>${executedBy}<br>` +
-      `<strong>Level:</strong> ${currentLevel}<br>` +
-      `<strong>Progress:</strong> ${progressBarHTML}<br>` +
-      `<strong>Current EXP:</strong> ${currentExp} ${EXP_UNIT}<br>` +
-      `<strong>EXP needed:</strong> ${expNeeded} more for Level ${currentLevel + 1}<br>` +
+      `<div style="background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.05)); border-radius: 10px; padding: 12px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); border: 1px solid rgba(125, 125, 125, 0.2);">` +
+      
+      // Name at the top
+      `<div style="text-align: center; margin-bottom: 8px;">` +
+      `<div style="font-size: 1.5em; font-weight: bold;">` +
+      `<span>${Impulse.nameColor(userid, true, false)}</span>` +
+      `</div>` +
+      `</div>` +
+      
+      // Level display
+      `<div style="text-align: center; margin-bottom: 10px;">` +
+      `<div style="font-size: 1.3em; font-weight: bold; display: inline-block; padding: 3px 12px; border-radius: 15px; background: linear-gradient(90deg, rgba(52, 152, 219, 0.2), rgba(155, 89, 182, 0.2)); color: #3498db;">` +
+      `Level ${currentLevel}` +
+      `</div>` +
+      `</div>` +
+      
+      // Progress bar
+      `<div style="margin: 12px 0;">` +
+      `${progressBarHTML}` +
+      `</div>` +
+      
+      // Completion percentage
+      `<div style="text-align: center; font-size: 0.9em; margin-bottom: 10px;">` +
+      `${progressPercentage}% complete` +
+      `</div>` +
+      
+      // Stats boxes
+      `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px;">` +
+      `<div style="background: rgba(150, 150, 150, 0.1); padding: 8px; border-radius: 8px; text-align: center;">` +
+      `<div style="font-size: 0.8em; opacity: 0.7;">Current EXP</div>` +
+      `<div style="font-weight: bold; color: #3498db;">${currentExp} ${EXP_UNIT}</div>` +
+      `</div>` +
+      `<div style="background: rgba(150, 150, 150, 0.1); padding: 8px; border-radius: 8px; text-align: center;">` +
+      `<div style="font-size: 0.8em; opacity: 0.7;">Needed for Level ${currentLevel + 1}</div>` +
+      `<div style="font-weight: bold; color: #e74c3c;">${expNeeded} ${EXP_UNIT}</div>` +
+      `</div>` +
+      `</div>` +
+      
+      `<div style="font-size: 0.8em; margin-top: 10px; text-align: center; opacity: 0.7;">` +
+      `Total progress: ${currentExp}/${nextLevelExp} ${EXP_UNIT}` +
+      `</div>` +
       `</div>`
     );
   },
@@ -358,26 +532,28 @@ export const commands: Chat.Commands = {
     }
   },
 
-	toggledoubleexp(target, room, user) {
+  toggledoubleexp(target, room, user) {
     this.checkCan('globalban');
     
     if (!target) {
-        DOUBLE_EXP = !DOUBLE_EXP;
-        DOUBLE_EXP_END_TIME = null;
-        ExpSystem.checkDoubleExpStatus(room, user);
-        return;
+      DOUBLE_EXP = !DOUBLE_EXP;
+      DOUBLE_EXP_END_TIME = null;
+      ExpSystem.saveExpConfig();
+      ExpSystem.checkDoubleExpStatus(room, user);
+      return;
     }
 
     if (target.toLowerCase() === 'off') {
-        DOUBLE_EXP = false;
-        DOUBLE_EXP_END_TIME = null;
-        ExpSystem.checkDoubleExpStatus(room, user);
-        return;
+      DOUBLE_EXP = false;
+      DOUBLE_EXP_END_TIME = null;
+      ExpSystem.saveExpConfig();
+      ExpSystem.checkDoubleExpStatus(room, user);
+      return;
     }
 
     const match = target.match(/^(\d+)\s*(minute|hour|day)s?$/i);
     if (!match) {
-        return this.errorReply('Invalid format. Use: number + unit (minutes/hours/days)');
+      return this.errorReply('Invalid format. Use: number + unit (minutes/hours/days)');
     }
 
     const [, amount, unit] = match;
@@ -387,36 +563,14 @@ export const commands: Chat.Commands = {
     DOUBLE_EXP = true;
     DOUBLE_EXP_END_TIME = endTime;
     
+    ExpSystem.saveExpConfig();
     ExpSystem.checkDoubleExpStatus(room, user);
     setTimeout(() => ExpSystem.checkDoubleExpStatus(), duration);
-},
-
+  },
+  
   expladder(target, room, user) {
     if (!this.runBroadcast()) return;
-    const richest = ExpSystem.getRichestUsers(100);
-    if (!richest.length) {
-      return this.sendReplyBox(`No users have any ${EXP_UNIT} yet.`);
-    }
-
-    const data = richest.map(([userid, exp], index) => {
-      const level = ExpSystem.getLevel(exp);
-      const expForNext = ExpSystem.getExpForNextLevel(level + 1);
-      return [
-        (index + 1).toString(),
-        Impulse.nameColor(userid, true, true),
-        `${exp} ${EXP_UNIT}`,
-        level.toString(),
-        `${expForNext} ${EXP_UNIT}`,
-      ];
-    });
-
-    const output = Impulse.generateThemedTable(
-      `Top ${richest.length} Users by ${EXP_UNIT}`,
-      ['Rank', 'User', 'EXP', 'Level', 'Next Level At'],
-      data,
-      Impulse.nameColor('TurboRx', true, true)
-    );
-    this.ImpulseReplyBox(output);
+    return this.parse(`/join view-expladder`);
   },
 
   exphelp(target, room, user) {
